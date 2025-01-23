@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Croatia Temperature Interpolated Heatmap</title>
+    <meta charset="utf-8" />
+
+    <!-- Turf.js -->
+    <script src="https://unpkg.com/@turf/turf@6.5.0/turf.min.js"></script>
+
+    <!-- Leaflet CSS -->
+    <link
+      rel="stylesheet"
+      href="https://unpkg.com/leaflet/dist/leaflet.css" />
+
+    <!-- Leaflet JS -->
+    <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+
+    <link rel="stylesheet"
+      href="https://unpkg.com/leaflet.pm/dist/leaflet.pm.css" />
+    <script src="https://unpkg.com/leaflet.pm/dist/leaflet.pm.min.js"></script>
+
+    <!-- Leaflet-IDW Plugin -->
+    <script src="/js/leaflet-idw.js"></script>
+
+    <style>
+    #map {
+      height: 600px;
+      width: 600px;    
+    }
+    
+      body, html {
+      height: 100%;
+      width: 100%;
+      margin: 0;
+      padding: 0;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      background-image: url('https://getwallpapers.com/wallpaper/full/9/a/b/34783.jpg');
+      background-size: cover;
+      background-position: center;
+    }
+
+    .leaflet-container {
+      background: transparent !important;
+    }
+
+    .leaflet-bottom {
+      display: none;
+    }
+  </style>
+  </head>
+  <body>
+    <!-- Map Container -->
+    <div id="map"></div>
+
+    <script>
+    // Initialize the map centered on Croatia
+    var map = L.map('map', {
+      zoomControl: false, // Disable zoom control
+      scrollWheelZoom: false, // Disable scroll wheel zoom
+      dragging: false, // Disable dragging
+      touchZoom: false, // Disable touch zoom
+      doubleClickZoom: false, // Disable double click zoom
+      boxZoom: false, // Disable box zoom
+      keyboard: false // Disable keyboard interactions
+    }).setView([44.3, 16.3], 7); // Adjust coordinates and zoom as needed
+
+    function adjustZoom() {
+      var mapWidth = document.getElementById('map').offsetWidth;
+      var newZoom = 7;
+
+      if (mapWidth < 600) {
+        newZoom = 6;
+      }
+      if (mapWidth < 400) {
+        newZoom = 5;
+      }
+      if (mapWidth < 300) {
+        newZoom = 4;
+      }
+
+      map.setZoom(newZoom);
+    }
+
+    window.addEventListener('resize', adjustZoom);
+    adjustZoom(); // Initial call to set the zoom level based on the initial size
+
+
+    // Style for Croatia
+    function style(feature) {
+      return {
+        fillColor: '#000000', // Black fill color
+        fillOpacity: 0,
+        color: '#FFFFFF',     // White border color
+        weight: 2,
+        opacity: 1
+      };
+    }
+
+    var croatiaFeature;
+    var mask;
+
+        // GeoJSON URL for world countries
+        //var geojsonURL = 'https://raw.githubusercontent.com/johan/world.geo.json/master/countries.geo.json';
+        var geojsonURL = './cro-data/custom.geo.json';
+
+    // Load GeoJSON data
+    fetch(geojsonURL)
+      .then(response => response.json())
+      .then(data => {
+        // Find Croatia's feature
+        croatiaFeature = data.features.find(function(feature) {
+          return feature.properties.name === "Croatia";
+        });
+
+        // Create a world polygon
+        var worldPolygon = {
+          "type": "Feature",
+          "geometry": {
+            "type": "Polygon",
+            "coordinates": [[
+              [-180, -90],
+              [-180, 90],
+              [180, 90],
+              [180, -90],
+              [-180, -90]
+            ]]
+          }
+        };
+
+        // Create a mask by subtracting Croatia from the world polygon
+        mask = turf.difference(worldPolygon, croatiaFeature);
+
+        // Add the mask layer to the map
+        L.geoJSON(mask, {
+          style: {
+            fillColor: '#000000', // Black mask
+            fillOpacity: 0,
+            color: '#000000',
+            opacity: 1
+          }
+        }).addTo(map);
+
+        // Add Croatia to the map
+        L.geoJSON(croatiaFeature, { style: style, onEachFeature: function (feature, layer) {
+          if (layer._path) {
+            layer._path.classList.add('blur-croatia');
+          }
+        } }).addTo(map);
+
+        // After adding the map layers, fetch and display the heatmap
+        fetchTemperatureData();
+      })
+      .catch(error => console.error('Error loading GeoJSON data:', error));
+
+    function fetchTemperatureData() {
+  var proxyURL = 'https://api.allorigins.win/get?url=';
+  var dataURL = encodeURIComponent('https://vrijeme.hr/hrvatska_n.xml');
+
+  fetch(proxyURL + dataURL)
+    .then(response => response.json())
+    .then(data => {
+      console.log('XML data temperature:', data.contents)
+      var xmlText = data.contents;
+      var parser = new DOMParser();
+      var xmlDoc = parser.parseFromString(xmlText, "application/xml");
+
+      var stations = xmlDoc.getElementsByTagName('Grad');
+
+      var heatmapData = []; // Array to store data for the heatmap
+
+      for (var i = 0; i < stations.length; i++) {
+        var station = stations[i];
+
+        var gradIme = station.getElementsByTagName('GradIme')[0].textContent;
+
+        var lat = parseFloat(station.getElementsByTagName('Lat')[0].textContent);
+        var lon = parseFloat(station.getElementsByTagName('Lon')[0].textContent);
+        var tempText = station.getElementsByTagName('Temp')[0].textContent;
+        var temp = parseFloat(tempText.replace(',', '.')); // Replace comma with dot if necessary
+
+        // Check if data is valid
+        if (!isNaN(lat) && !isNaN(lon) && !isNaN(temp)) {
+          console.log(gradIme + ' (' + lat + ', ' + lon + '): ' + temp);
+          heatmapData.push([lat, lon, temp]);
+        }
+      }
+
+      // Find the highest temperature in heatmapData
+      var maxTemp = Math.max(...heatmapData.map(data => data[2]));
+
+      maxTemp = maxTemp + 0;
+
+      console.log('Max temperature:', maxTemp);
+
+      // Create the heatmap layer
+      var heatmapLayer = L.idwLayer(heatmapData, {
+        mask: croatiaFeature,
+        opacity: 1,
+        cellSize: 4,
+        exp: 3,
+        max: maxTemp, // Adjust max temperature based on data
+        gradient: {
+          0.0: 'blue',
+          0.5: 'lime',
+          1.0: 'red'
+        }
+      }).addTo(map);
+    })
+    .catch(error => console.error('Error fetching XML data:', error));
+}
+
+  </script>
+  </body>
+</html>
