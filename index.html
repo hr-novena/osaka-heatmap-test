@@ -29,7 +29,7 @@
     }
     
       body, html {
-      height: 100%;
+      height: 900px;
       width: 100%;
       margin: 0;
       padding: 0;
@@ -48,11 +48,31 @@
     .leaflet-bottom {
       display: none;
     }
+
+    #temperature-info {
+      color: white;
+      padding-right: 10px;
+    }
+
+    #stations-info {
+      color: white;
+      
+    }
+    #stations-info p {
+      margin: 3px 0; /* Adjust the margin as needed */
+    }
   </style>
   </head>
   <body>
     <!-- Map Container -->
     <div id="map"></div>
+
+    <div id="temperature-info">
+      <p>Max temp.: <span id="max-temp"></span></p>
+      <p>Min temp.: <span id="min-temp"></span></p>
+    </div>
+
+    <div id="stations-info"></div>
 
     <script>
     // Initialize the map centered on Croatia
@@ -170,6 +190,15 @@
 
       var heatmapData = []; // Array to store data for the heatmap
 
+      var stations = Array.from(xmlDoc.getElementsByTagName('Grad'));
+
+       // Sort stations by temperature before the for loop
+       stations.sort((a, b) => {
+          var tempA = parseFloat(a.getElementsByTagName('Temp')[0].textContent.replace(',', '.'));
+          var tempB = parseFloat(b.getElementsByTagName('Temp')[0].textContent.replace(',', '.'));
+          return tempA - tempB;
+        });
+
       for (var i = 0; i < stations.length; i++) {
         var station = stations[i];
 
@@ -184,15 +213,29 @@
         if (!isNaN(lat) && !isNaN(lon) && !isNaN(temp)) {
           console.log(gradIme + ' (' + lat + ', ' + lon + '): ' + temp);
           heatmapData.push([lat, lon, temp]);
+
+          var stationInfo = document.createElement('p');
+          stationInfo.textContent = gradIme + ' (' + lat + ', ' + lon + '): ' + temp;
+          document.getElementById('stations-info').appendChild(stationInfo);
+
+
         }
       }
-
+     
       // Find the highest temperature in heatmapData
       var maxTemp = Math.max(...heatmapData.map(data => data[2]));
 
+      // Find the lowest temperature in heatmapData
+      var minTemp = Math.min(...heatmapData.map(data => data[2]));
+
       maxTemp = maxTemp + 0;
 
-      console.log('Max temperature:', maxTemp);
+      console.log('Max temperature:', maxTemp );
+      console.log('Min temperature:', minTemp );
+
+      // Display temperatures on the page
+      document.getElementById('max-temp').textContent = maxTemp;
+      document.getElementById('min-temp').textContent = minTemp;
 
       // Create the heatmap layer
       var heatmapLayer = L.idwLayer(heatmapData, {
