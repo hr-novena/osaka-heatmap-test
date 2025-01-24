@@ -61,6 +61,47 @@
     #stations-info p {
       margin: 3px 0; /* Adjust the margin as needed */
     }
+
+    .gradient-editor {
+            margin: 20px;
+            color: white;
+        }
+
+        .modal {
+    display: none;
+    position: fixed;
+    z-index: 1;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    overflow: auto;
+    background-color: rgb(0,0,0);
+    background-color: rgba(0,0,0,0.4);
+    padding-top: 60px;
+}
+
+.modal-content {
+    background-color: #fefefe;
+    margin: 5% auto;
+    padding: 20px;
+    border: 1px solid #888;
+    width: 80%;
+}
+
+.close {
+    color: #aaa;
+    float: right;
+    font-size: 28px;
+    font-weight: bold;
+}
+
+.close:hover,
+.close:focus {
+    color: black;
+    text-decoration: none;
+    cursor: pointer;
+}
   </style>
   </head>
   <body>
@@ -72,9 +113,30 @@
       <p>Min temp.: <span id="min-temp"></span></p>
     </div>
 
-    <div id="stations-info"></div>
+    <div id="stations-info" style="display: none;"></div>
+    <button onclick="toggleStationsInfo()"> Show/Hide stations </button>
+
+    <div class="gradient-editor">
+      <h3>Heatmap Gradient Editor</h3>
+      <form id="gradientForm">
+        <div id="colorInputs">
+          <label for="color1">Color 1:</label>
+          <input type="color" id="color1" name="color1" value="#ff0000">
+          <input type="range" id="stop1" min="0" max="1" step="0.01" value="0" oninput="updateStopValue(1)">
+          <span id="stopValue1">0</span>
+        </div>
+        <button type="button" onclick="addColorInput()">Add Color</button>
+        <button type="button" onclick="updateGradient()">Update Gradient</button>
+        <button onclick="showGradientValues()">Copy Gradient Values</button>
+      </form>
+    </div>
 
     <script>
+
+var heatmapData = []; 
+var maxTemp;
+var minTemp;
+
     // Initialize the map centered on Croatia
     var map = L.map('map', {
       zoomControl: false, // Disable zoom control
@@ -178,6 +240,8 @@
   var proxyURL = 'https://api.allorigins.win/get?url=';
   var dataURL = encodeURIComponent('https://vrijeme.hr/hrvatska_n.xml');
 
+  
+
   fetch(proxyURL + dataURL)
     .then(response => response.json())
     .then(data => {
@@ -188,7 +252,7 @@
 
       var stations = xmlDoc.getElementsByTagName('Grad');
 
-      var heatmapData = []; // Array to store data for the heatmap
+      heatmapData = []; // Array to store data for the heatmap
 
       var stations = Array.from(xmlDoc.getElementsByTagName('Grad'));
 
@@ -215,7 +279,7 @@
           heatmapData.push([lat, lon, temp]);
 
           var stationInfo = document.createElement('p');
-          stationInfo.textContent = gradIme + ' (' + lat + ', ' + lon + '): ' + temp;
+          stationInfo.textContent = gradIme + /* ' (' + lat + ', ' + lon + '): ' */':' + temp;
           document.getElementById('stations-info').appendChild(stationInfo);
 
 
@@ -223,10 +287,10 @@
       }
      
       // Find the highest temperature in heatmapData
-      var maxTemp = Math.max(...heatmapData.map(data => data[2]));
+      maxTemp = Math.max(...heatmapData.map(data => data[2]));
 
       // Find the lowest temperature in heatmapData
-      var minTemp = Math.min(...heatmapData.map(data => data[2]));
+      minTemp = Math.min(...heatmapData.map(data => data[2]));
 
       maxTemp = maxTemp + 0;
 
@@ -238,7 +302,7 @@
       document.getElementById('min-temp').textContent = minTemp;
 
       // Create the heatmap layer
-      var heatmapLayer = L.idwLayer(heatmapData, {
+      heatmapLayer = L.idwLayer(heatmapData, {
         mask: croatiaFeature,
         opacity: 1,
         cellSize: 4,
@@ -252,6 +316,80 @@
       }).addTo(map);
     })
     .catch(error => console.error('Error fetching XML data:', error));
+}
+
+var heatmapLayer;
+
+function updateStopValue(index) {
+    const stopValue = document.getElementById(`stop${index}`).value;
+    document.getElementById(`stopValue${index}`).innerText = stopValue;
+}
+
+let colorCount = 1;
+
+function addColorInput() {
+    colorCount++;
+    const colorInputs = document.getElementById('colorInputs');
+    const newColorInput = document.createElement('div');
+    newColorInput.innerHTML = `
+        <label for="color${colorCount}">Color ${colorCount}:</label>
+        <input type="color" id="color${colorCount}" name="color${colorCount}" value="#000000">
+        <input type="range" id="stop${colorCount}" min="0" max="1" step="0.01" value="0" oninput="updateStopValue(${colorCount})">
+        <span id="stopValue${colorCount}">0</span><br>
+    `;
+    colorInputs.appendChild(newColorInput);
+
+    // Add event listeners to the new inputs
+    //document.getElementById(`color${colorCount}`).addEventListener('input', updateGradient);
+    //document.getElementById(`stop${colorCount}`).addEventListener('input', updateGradient);
+}
+
+function updateGradient() {
+  const gradientStops = {};
+    for (let i = 1; i <= colorCount; i++) {
+        const color = document.getElementById(`color${i}`).value;
+        const stop = document.getElementById(`stop${i}`).value;
+        gradientStops[stop] = color;
+    }
+    const gradient = `linear-gradient(to right, ${Object.entries(gradientStops).map(([stop, color]) => `${color} ${stop * 100}%`).join(', ')})`;
+    //document.getElementById('gradient-preview').style.background = gradient;
+
+    if (heatmapLayer) {
+        map.removeLayer(heatmapLayer); // Remove the existing heatmap layer
+    }
+
+    heatmapLayer = L.idwLayer(heatmapData, {
+              mask: croatiaFeature,
+              opacity: 1,
+              cellSize: 4,
+              exp: 3,
+              max: maxTemp, // Adjust max temperature based on data
+              gradient: gradientStops
+            }).addTo(map);
+}
+
+function showGradientValues() {
+    const gradientStops = {};
+    for (let i = 1; i <= colorCount; i++) {
+        const color = document.getElementById(`color${i}`).value;
+        const stop = document.getElementById(`stop${i}`).value;
+        gradientStops[stop] = color;
+    }
+    const gradientValues = JSON.stringify(gradientStops, null, 2);
+    navigator.clipboard.writeText(gradientValues).then(() => {
+        console.log('Gradient values copied to clipboard:', gradientValues);
+    }).catch(err => {
+        console.error('Failed to copy gradient values: ', err);
+    });
+}
+
+function toggleStationsInfo() {
+    const stationsInfo = document.getElementById('stations-info');
+    if (stationsInfo.style.display === 'none') {
+        stationsInfo.style.display = 'block';
+    } else {
+        stationsInfo.style.display = 'none';
+    }
 }
 
   </script>
