@@ -1,0 +1,48 @@
+#map {
+  width: 1280px;
+  height: 640px;
+  position: relative;
+}
+
+#content {
+  width: 1280px;
+  height: 640px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+ 
+  background-image: url('../assets/paviljon-background.png');
+  background-size: cover;
+  background-position: center;
+  overflow: hidden; /* Prevent background image from rendering outside defined size */
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  font-family: 'Roboto', sans-serif;
+  background-color: #f5f5f5;
+}
+
+#overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 1280px;
+  height: 640px;
+  background-image: url('../assets/Subtract-4.png');
+  background-size: cover;
+  background-position: center;
+  pointer-events: none; /* Allows interaction with the map below */
+  z-index: 1000;
+}
+
+#video-player {
+  position: absolute; /* Position the video absolutely within the overlay */
+  top: 80px;
+  left: -80px;
+  width: 640px; /* Adjust the width as needed */
+  height: auto;
+  transform: rotate(270deg); /* Rotate the video by 90 degrees */
+  pointer-events: auto; /* Allow interaction with the video player */
+}
